@@ -9,8 +9,7 @@
      STEP 1: PASTE YOUR LEADFEEDER SCRIPT BELOW THIS LINE
      (Leadfeeder > "HTML Code" option > copy the whole <script>…</script>)
      ============================================================ -->
-
-      <script> (function(ss,ex){ window.ldfdr=window.ldfdr||function(){(ldfdr._q=ldfdr._q||[]).push([].slice.call(arguments));}; (function(d,s){ fs=d.getElementsByTagName(s)[0]; function ce(src){ var cs=d.createElement(s); cs.src=src; cs.async=1; fs.parentNode.insertBefore(cs,fs); }; ce('https://sc.lfeeder.com/lftracker_v1_'+ss+(ex?'_'+ex:'')+'.js'); })(document,'script'); })('kn9Eq4RGbq0aRlvP'); </script>
+<script> (function(ss,ex){ window.ldfdr=window.ldfdr||function(){(ldfdr._q=ldfdr._q||[]).push([].slice.call(arguments));}; (function(d,s){ fs=d.getElementsByTagName(s)[0]; function ce(src){ var cs=d.createElement(s); cs.src=src; cs.async=1; fs.parentNode.insertBefore(cs,fs); }; ce('https://sc.lfeeder.com/lftracker_v1_'+ss+(ex?'_'+ex:'')+'.js'); })(document,'script'); })('kn9Eq4RGbq0aRlvP'); </script>
   
 
 
@@ -97,26 +96,57 @@
   // /doc-intel/landing -> /doc-intel/upload -> /doc-intel/result per visit.
   var BASE = location.origin + location.pathname.replace(/\/$/, '');
 
+  // The Leadfeeder snippet first installs a tiny placeholder; the real tracker
+  // (with .pageview / .identify) replaces it once sc.lfeeder.com loads.
+  // We queue calls until then and report clearly if it never loads.
+  var lfReady = false, lfQueue = [];
+  function realTrackerLoaded() {
+    return window.ldfdr && typeof window.ldfdr.pageview === 'function';
+  }
+  function flushQueue() {
+    while (lfQueue.length) { lfQueue.shift()(); }
+  }
+  (function waitForTracker() {
+    var start = Date.now();
+    var t = setInterval(function () {
+      if (realTrackerLoaded()) {
+        clearInterval(t); lfReady = true;
+        log('✓ Leadfeeder tracker loaded');
+        flushQueue();
+      } else if (Date.now() - start > 10000) {
+        clearInterval(t);
+        if (!window.ldfdr) {
+          log('✗ No Leadfeeder snippet on the page – check STEP 1 in <head>');
+        } else {
+          log('✗ Snippet found, but the tracker file from sc.lfeeder.com never loaded.\n' +
+              '  Most likely an ad blocker / tracking prevention. Try Incognito with extensions off,\n' +
+              '  and check DevTools > Network for "lfeeder" (blocked / ERR_BLOCKED_BY_CLIENT).');
+        }
+      }
+    }, 250);
+  })();
+
+  function whenReady(fn) { if (lfReady) fn(); else lfQueue.push(fn); }
+
   function lfPageview(stepName, title) {
-    log('pageview: /doc-intel/' + stepName);
-    if (window.ldfdr && typeof window.ldfdr.pageview === 'function') {
+    log('pageview: /doc-intel/' + stepName + (lfReady ? '' : '  (queued)'));
+    whenReady(function () {
       window.ldfdr.pageview({
         pageUrl: BASE + '/doc-intel/' + stepName,
         pageTitle: 'Doc Intelligence – ' + title
       });
-    } else {
-      log('  (Leadfeeder script not loaded yet – check STEP 1 in <head>)');
-    }
+    });
   }
 
   function lfIdentify(email, firstName, lastName) {
-    log('identify: ' + email);
-    if (window.ldfdr && typeof window.ldfdr.identify === 'function') {
+    log('identify: ' + email + (lfReady ? '' : '  (queued)'));
+    whenReady(function () {
+      if (typeof window.ldfdr.identify !== 'function') { log('  identify() not available on this tracker'); return; }
       var payload = { email: email };
       if (firstName) payload.firstName = firstName;
       if (lastName) payload.lastName = lastName;
       window.ldfdr.identify(payload);
-    }
+    });
   }
 
   // ---------- Flow ----------
