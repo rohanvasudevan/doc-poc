@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Doc Intelligence – Try it</title>
+
+<!-- ============================================================
+     STEP 1: PASTE YOUR LEADFEEDER SCRIPT BELOW THIS LINE
+     (Leadfeeder > "HTML Code" option > copy the whole <script>…</script>)
+     ============================================================ -->
+
+
+
+<!-- ============================================================ -->
+
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #f6f7f9; color: #1d2330; }
+  header { background: #0f172a; color: #fff; padding: 16px 32px; font-weight: 600; }
+  main { max-width: 760px; margin: 40px auto; padding: 0 20px; }
+  .card { background: #fff; border-radius: 12px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  h1 { margin-top: 0; }
+  button { background: #2563eb; color: #fff; border: 0; border-radius: 8px; padding: 12px 20px; font-size: 15px; cursor: pointer; }
+  button:disabled { background: #94a3b8; cursor: default; }
+  input[type=email], input[type=text] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; margin: 6px 0 14px; }
+  .step { display: none; }
+  .step.active { display: block; }
+  .drop { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 40px; text-align: center; margin: 16px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  td { border-bottom: 1px solid #e2e8f0; padding: 8px; }
+  td:first-child { color: #64748b; width: 40%; }
+  .muted { color: #64748b; font-size: 14px; }
+  #log { margin-top: 24px; font: 12px monospace; color: #475569; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<header>Doc Intelligence · POC test page</header>
+<main>
+<div class="card">
+
+  <!-- Landing -->
+  <section class="step active" id="step-landing">
+    <h1>Extract data from any document</h1>
+    <p>Upload an invoice, contract or form and get structured fields back in seconds.</p>
+    <button onclick="go('gate')">Try Doc Intelligence</button>
+  </section>
+
+  <!-- Optional email gate (tests person-level identify) -->
+  <section class="step" id="step-gate">
+    <h2>Tell us who you are</h2>
+    <label>Work email<input type="email" id="email" placeholder="you@company.com"></label>
+    <label>First name<input type="text" id="first"></label>
+    <label>Last name<input type="text" id="last"></label>
+    <button onclick="submitGate()">Continue</button>
+    <p class="muted"><a href="#" onclick="go('upload');return false;">Skip (stay anonymous)</a></p>
+  </section>
+
+  <!-- Upload -->
+  <section class="step" id="step-upload">
+    <h2>Upload a document</h2>
+    <div class="drop">
+      <input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg,.docx">
+    </div>
+    <button id="runBtn" onclick="runExtraction()" disabled>Run extraction</button>
+  </section>
+
+  <!-- Processing -->
+  <section class="step" id="step-processing">
+    <h2>Processing…</h2>
+    <p class="muted">Reading layout, detecting fields.</p>
+  </section>
+
+  <!-- Results (mocked) -->
+  <section class="step" id="step-result">
+    <h2>Extracted fields</h2>
+    <table>
+      <tr><td>Document type</td><td>Invoice</td></tr>
+      <tr><td>Vendor</td><td>Acme Supplies Ltd.</td></tr>
+      <tr><td>Invoice #</td><td>INV-20481</td></tr>
+      <tr><td>Date</td><td>2026-11-02</td></tr>
+      <tr><td>Total</td><td>$4,312.50</td></tr>
+    </table>
+    <button onclick="downloadResult()">Download JSON</button>
+    <button onclick="go('upload')" style="background:#475569">Try another document</button>
+  </section>
+
+  <div id="log"></div>
+</div>
+</main>
+
+<script>
+  // ---------- Leadfeeder helpers ----------
+  // Each step is sent as a virtual pageview, so in Leadfeeder you'll see e.g.
+  // /doc-intel/landing -> /doc-intel/upload -> /doc-intel/result per visit.
+  var BASE = location.origin + location.pathname.replace(/\/$/, '');
+
+  function lfPageview(stepName, title) {
+    log('pageview: /doc-intel/' + stepName);
+    if (window.ldfdr && typeof window.ldfdr.pageview === 'function') {
+      window.ldfdr.pageview({
+        pageUrl: BASE + '/doc-intel/' + stepName,
+        pageTitle: 'Doc Intelligence – ' + title
+      });
+    } else {
+      log('  (Leadfeeder script not loaded yet – check STEP 1 in <head>)');
+    }
+  }
+
+  function lfIdentify(email, firstName, lastName) {
+    log('identify: ' + email);
+    if (window.ldfdr && typeof window.ldfdr.identify === 'function') {
+      var payload = { email: email };
+      if (firstName) payload.firstName = firstName;
+      if (lastName) payload.lastName = lastName;
+      window.ldfdr.identify(payload);
+    }
+  }
+
+  // ---------- Flow ----------
+  var titles = { landing: 'Landing', gate: 'Email gate', upload: 'Upload',
+                 processing: 'Processing', result: 'Result' };
+
+  function go(step) {
+    document.querySelectorAll('.step').forEach(function (s) { s.classList.remove('active'); });
+    document.getElementById('step-' + step).classList.add('active');
+    if (step !== 'landing') lfPageview(step, titles[step]); // landing is tracked by the normal page load
+  }
+
+  function submitGate() {
+    var email = document.getElementById('email').value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { alert('Enter a valid work email'); return; }
+    lfIdentify(email, document.getElementById('first').value.trim(), document.getElementById('last').value.trim());
+    go('upload');
+  }
+
+  document.getElementById('file').addEventListener('change', function () {
+    var has = this.files && this.files.length > 0;
+    document.getElementById('runBtn').disabled = !has;
+    if (has) lfPageview('file-selected', 'File selected');
+  });
+
+  function runExtraction() {
+    go('processing');
+    setTimeout(function () { go('result'); }, 2000);
+  }
+
+  function downloadResult() {
+    lfPageview('download', 'Downloaded result');
+    var blob = new Blob([JSON.stringify({ vendor: 'Acme Supplies Ltd.', invoice: 'INV-20481', total: 4312.5 }, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'extraction.json'; a.click();
+  }
+
+  function log(msg) {
+    document.getElementById('log').textContent += new Date().toLocaleTimeString() + '  ' + msg + '\n';
+  }
+</script>
+</body>
+</html>
